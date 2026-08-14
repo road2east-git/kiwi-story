@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#3fa7e0">
+<title>Kiwi Story</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="controls">
+  <div class="pad pad-left">
+    <button class="ctl" id="btn-left" aria-label="왼쪽">◀</button>
+    <button class="ctl" id="btn-right" aria-label="오른쪽">▶</button>
+  </div>
+  <div class="pad pad-right">
+    <button class="ctl btn-b" id="btn-shoot" aria-label="발사">B</button>
+    <button class="ctl btn-a" id="btn-jump" aria-label="점프">A</button>
+  </div>
+</div>
+
+<script src="js/audio.js"></script>
+<script src="js/input.js"></script>
+<script src="js/levels.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
