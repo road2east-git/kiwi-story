@@ -56,7 +56,7 @@
     const s = G.level.playerStart;
     player = {
       x: s.x, y: s.y, w: 22, h: 26, vx: 0, vy: 0,
-      onGround: false, facing: 1, riding: null,
+      onGround: false, facing: 1, riding: null, canAirJump: true,
       invuln: 2, shootCd: 0, boardCd: 0, anim: 0,
     };
   }
@@ -86,7 +86,7 @@
     b.popped = true;
     Sfx.pop();
     burst(b.x + b.w / 2, b.y + b.h / 2, '#ff6b81', 14);
-    if (player.riding === b) player.riding = null;
+    if (player.riding === b) { player.riding = null; player.canAirJump = true; }
   }
 
   // ── 업데이트 ──
@@ -137,7 +137,7 @@
       player.vx = b.vx; player.vy = b.vy;
       b.rideTime = (b.rideTime || 0) + dt;
       if (touchesTile(L, b, '^', 6) || b.rideTime > 14) popBalloon(b);
-      if (inp.down) { player.riding = null; player.vy = 40; player.boardCd = 0.6; } // 키보드: 내려서 하차
+      if (inp.down) { player.riding = null; player.vy = 40; player.boardCd = 0.6; player.canAirJump = true; } // 키보드: 내려서 하차
     } else {
       player.riding = null;
       const ax = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
@@ -147,13 +147,22 @@
       if (player.vx < target) player.vx = Math.min(target, player.vx + accel * dt);
       else if (player.vx > target) player.vx = Math.max(target, player.vx - accel * dt);
 
-      if (Input.justPressed('jump') && player.onGround) {
-        player.vy = -520;
-        Sfx.jump();
+      if (Input.justPressed('jump')) {
+        if (player.onGround) {
+          player.vy = -520;
+          Sfx.jump();
+        } else if (player.canAirJump) {
+          // 2단 점프: 공중에서 한 번만, 착지해야 다시 충전
+          player.vy = -500;
+          player.canAirJump = false;
+          Sfx.airJump();
+          burst(player.x + player.w / 2, player.y + player.h, '#ffffff', 6);
+        }
       }
       // 가변 점프: 상승 중 버튼 유지 시 중력 감소 (원작의 "누른 만큼 점프")
       const g = (inp.jump && player.vy < 0) ? GRAVITY * 0.52 : GRAVITY;
       physicsStep(L, player, dt, { gravity: g });
+      if (player.onGround) player.canAirJump = true;
 
       // 자유 풍선 탑승
       for (const b of balloons) {
@@ -311,10 +320,12 @@
     ctx.fillRect(0, 0, cw, chh);
 
     if (G.level) {
+      drawSun();
       drawClouds();
       ctx.save();
       ctx.scale(scale, scale);
       ctx.translate(-cam.x, -cam.y);
+      drawHills();
       drawTiles();
       drawCage();
       for (const c of coins) if (!c.taken) drawCoin(c);
@@ -333,6 +344,34 @@
     }
 
     drawHUD();
+  }
+
+  function drawSun() {
+    ctx.save();
+    ctx.scale(scale, scale);
+    const sx = viewW - 84, sy = 88;
+    ctx.fillStyle = 'rgba(255,236,150,.35)';
+    ctx.beginPath(); ctx.arc(sx, sy, 58, 0, 6.29); ctx.fill();
+    ctx.fillStyle = 'rgba(255,236,150,.5)';
+    ctx.beginPath(); ctx.arc(sx, sy, 44, 0, 6.29); ctx.fill();
+    ctx.fillStyle = '#ffe89a';
+    ctx.beginPath(); ctx.arc(sx, sy, 32, 0, 6.29); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawHills() {
+    // 레벨 바닥선에 맞춰 그려지는 멀리 있는 언덕
+    const L = G.level;
+    const baseY = L.pixelH + 70;
+    if (baseY - cam.y > viewH + 260 || baseY - cam.y < -40) return;
+    const cols = ['rgba(140,205,125,.55)', 'rgba(110,185,110,.45)'];
+    for (let k = -1; k < Math.ceil(L.pixelW / 260) + 1; k++) {
+      const hx = k * 260 + ((k % 2) ? 90 : 0);
+      ctx.fillStyle = cols[Math.abs(k) % 2];
+      ctx.beginPath();
+      ctx.ellipse(hx, baseY, 190, (k % 2) ? 130 : 170, 0, 0, 6.29);
+      ctx.fill();
+    }
   }
 
   function drawClouds() {
@@ -361,24 +400,47 @@
         const ch = L.tiles[ty][tx];
         const x = tx * TILE, y = ty * TILE;
         if (ch === '#') {
-          ctx.fillStyle = '#a2683a';
+          ctx.fillStyle = '#c68a53';
           ctx.fillRect(x, y, TILE, TILE);
-          ctx.fillStyle = '#8a5530';
-          ctx.fillRect(x + 1, y + 17, 14, 14);
-          ctx.fillRect(x + 17, y + 1, 14, 14);
+          // 흙 알갱이 점무늬 (타일 좌표 기반 고정 패턴)
+          ctx.fillStyle = '#b3763f';
+          const h = (tx * 53 + ty * 31) % 4;
+          ctx.beginPath(); ctx.arc(x + 8 + h * 3, y + 12, 2.5, 0, 6.29); ctx.fill();
+          ctx.beginPath(); ctx.arc(x + 22 - h * 2, y + 24, 2, 0, 6.29); ctx.fill();
           if (tileAt(L, tx, ty - 1) !== '#') { // 윗면 잔디
-            ctx.fillStyle = '#5fc84e';
-            ctx.fillRect(x, y, TILE, 8);
-            ctx.fillStyle = '#7ede6d';
-            ctx.fillRect(x, y, TILE, 3);
+            ctx.fillStyle = '#6ecf5a';
+            ctx.fillRect(x, y, TILE, 9);
+            ctx.fillStyle = '#8ce878';
+            ctx.fillRect(x, y, TILE, 4);
+            // 장식: 꽃 / 풀잎 (위 칸이 비어 있을 때만)
+            const d = (tx * 37 + ty * 17) % 8;
+            const airAbove = tileAt(L, tx, ty - 1) === ' ';
+            if (airAbove && d < 2) { // 꽃
+              const fx = x + 10 + (d ? 12 : 0);
+              ctx.strokeStyle = '#4aa53c'; ctx.lineWidth = 2;
+              ctx.beginPath(); ctx.moveTo(fx, y + 2); ctx.lineTo(fx, y - 8); ctx.stroke();
+              ctx.fillStyle = d ? '#ffd24a' : '#ff9ec5';
+              ctx.beginPath(); ctx.arc(fx, y - 11, 4.5, 0, 6.29); ctx.fill();
+              ctx.fillStyle = '#fff';
+              ctx.beginPath(); ctx.arc(fx, y - 11, 1.8, 0, 6.29); ctx.fill();
+            } else if (airAbove && d === 2) { // 풀잎
+              ctx.strokeStyle = '#4aa53c'; ctx.lineWidth = 2;
+              ctx.beginPath();
+              ctx.moveTo(x + 12, y + 2); ctx.lineTo(x + 9, y - 7);
+              ctx.moveTo(x + 17, y + 2); ctx.lineTo(x + 17, y - 9);
+              ctx.moveTo(x + 22, y + 2); ctx.lineTo(x + 25, y - 6);
+              ctx.stroke();
+            }
           }
         } else if (ch === '=') {
-          ctx.fillStyle = '#c98d4c';
-          ctx.fillRect(x, y + 2, TILE, 10);
-          ctx.fillStyle = '#e8b070';
-          ctx.fillRect(x, y + 2, TILE, 4);
+          ctx.fillStyle = '#e2a55e';
+          ctx.beginPath(); ctx.roundRect(x, y + 2, TILE, 11, 5); ctx.fill();
+          ctx.fillStyle = '#f4c286';
+          ctx.beginPath(); ctx.roundRect(x, y + 2, TILE, 5, 4); ctx.fill();
+          ctx.fillStyle = '#bd8342';
+          ctx.beginPath(); ctx.arc(x + 9, y + 9, 1.8, 0, 6.29); ctx.arc(x + 24, y + 9, 1.8, 0, 6.29); ctx.fill();
         } else if (ch === '^') {
-          ctx.fillStyle = '#c9ccd4';
+          ctx.fillStyle = '#c3c9d6';
           ctx.beginPath();
           ctx.moveTo(x, y + TILE);
           ctx.lineTo(x + 8, y + 6);
@@ -387,6 +449,8 @@
           ctx.lineTo(x + TILE, y + TILE);
           ctx.closePath();
           ctx.fill();
+          ctx.fillStyle = '#fff';
+          ctx.beginPath(); ctx.arc(x + 8, y + 8, 1.6, 0, 6.29); ctx.arc(x + 24, y + 8, 1.6, 0, 6.29); ctx.fill();
         }
       }
     }
@@ -421,9 +485,14 @@
     ctx.fill();
     // 눈
     ctx.fillStyle = '#fff';
-    ctx.beginPath(); ctx.arc(5, -21, 3.6, 0, 6.29); ctx.fill();
+    ctx.beginPath(); ctx.arc(5, -21, 3.8, 0, 6.29); ctx.fill();
     ctx.fillStyle = '#222';
-    ctx.beginPath(); ctx.arc(6, -21, 1.8, 0, 6.29); ctx.fill();
+    ctx.beginPath(); ctx.arc(6, -21, 2, 0, 6.29); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(6.8, -21.8, 0.8, 0, 6.29); ctx.fill();
+    // 볼터치
+    ctx.fillStyle = 'rgba(255,120,145,.4)';
+    ctx.beginPath(); ctx.arc(2, -16.5, 2.6, 0, 6.29); ctx.fill();
     ctx.restore();
   }
 
@@ -449,6 +518,14 @@
     ctx.fillStyle = 'rgba(255,255,255,.55)';
     ctx.beginPath();
     ctx.ellipse(cx - 4, cy - 5, 4, 6, -0.5, 0, 6.29);
+    ctx.fill();
+    // 매듭
+    ctx.fillStyle = '#e0475e';
+    ctx.beginPath();
+    ctx.moveTo(cx - 4, y + h - 6);
+    ctx.lineTo(cx + 4, y + h - 6);
+    ctx.lineTo(cx, y + h - 11);
+    ctx.closePath();
     ctx.fill();
   }
 
@@ -477,6 +554,9 @@
     ctx.moveTo(10, -10); ctx.lineTo(15, -11);
     ctx.moveTo(10, -8); ctx.lineTo(15, -8);
     ctx.stroke();
+    // 볼터치
+    ctx.fillStyle = 'rgba(255,140,160,.45)';
+    ctx.beginPath(); ctx.arc(3, -9, 2.4, 0, 6.29); ctx.fill();
     ctx.restore();
   }
 
@@ -493,6 +573,12 @@
     ctx.beginPath(); ctx.arc(-4, -12, 3, 0, 6.29); ctx.arc(4, -12, 3, 0, 6.29); ctx.fill();
     ctx.fillStyle = '#111';
     ctx.beginPath(); ctx.arc(-3, -12, 1.5, 0, 6.29); ctx.arc(5, -12, 1.5, 0, 6.29); ctx.fill();
+    // 볼터치와 작은 발
+    ctx.fillStyle = 'rgba(255,150,170,.5)';
+    ctx.beginPath(); ctx.arc(-7, -8, 2, 0, 6.29); ctx.arc(9, -8, 2, 0, 6.29); ctx.fill();
+    ctx.fillStyle = '#f5a623';
+    ctx.fillRect(-6, -2, 4, 3);
+    ctx.fillRect(2, -2, 4, 3);
     ctx.restore();
   }
 
@@ -520,6 +606,14 @@
     ctx.fillStyle = '#e0a92b';
     ctx.beginPath(); ctx.arc(0, 0, 5, 0, 6.29); ctx.fill();
     ctx.restore();
+    // 반짝임
+    const tw = (Math.sin(t * 5 + c.y) + 1) / 2;
+    ctx.strokeStyle = `rgba(255,255,255,${0.35 + tw * 0.55})`;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(c.x + 8, c.y - 12); ctx.lineTo(c.x + 8, c.y - 6);
+    ctx.moveTo(c.x + 5, c.y - 9); ctx.lineTo(c.x + 11, c.y - 9);
+    ctx.stroke();
   }
 
   function drawCage() {
@@ -558,7 +652,7 @@
       centerText('~ 뉴질랜드 스토리 오마주 ~', chh * 0.3 + 62 * u, 16 * u, '#fff');
       centerText('화살로 적을 쏘고, 풍선을 빼앗아 날아올라', chh * 0.52, 14 * u, '#cde8ff');
       centerText('갇힌 키위 친구들을 구출하세요!', chh * 0.52 + 22 * u, 14 * u, '#cde8ff');
-      centerText('이동 ◀▶ · 점프 A(길게 누르면 높이) · 발사 B', chh * 0.66, 13 * u, '#9fc9ee');
+      centerText('이동 ◀▶ · 점프 A(공중에서 한 번 더!) · 발사 B', chh * 0.66, 13 * u, '#9fc9ee');
       if (Math.floor(performance.now() / 500) % 2 === 0)
         centerText('탭 또는 아무 키나 눌러 시작', chh * 0.78, 18 * u, '#ffe08a');
       ctx.restore();

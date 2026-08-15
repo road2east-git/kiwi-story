@@ -46,6 +46,7 @@ const Sfx = (() => {
   return {
     unlock() { ensure(); },
     jump()   { tone(320, 0.12, { slide: 260 }); },
+    airJump(){ tone(520, 0.1,  { slide: 340, vol: 0.12 }); },
     shoot()  { tone(880, 0.07, { type: 'sawtooth', vol: 0.1, slide: -500 }); },
     hit()    { tone(200, 0.15, { type: 'triangle', slide: -120 }); noise(0.08, 0.12); },
     pop()    { noise(0.12, 0.25); tone(600, 0.1, { slide: -400 }); },
