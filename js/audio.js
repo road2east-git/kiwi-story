@@ -53,6 +53,7 @@ const Sfx = (() => {
     coin()   { tone(988, 0.06, { vol: 0.12 }); setTimeout(() => tone(1319, 0.12, { vol: 0.12 }), 60); },
     hurt()   { tone(220, 0.3, { type: 'sawtooth', slide: -160 }); },
     board()  { tone(440, 0.1, { slide: 220 }); },
+    hurry()  { tone(988, 0.09, { vol: 0.14 }); setTimeout(() => tone(988, 0.09, { vol: 0.14 }), 150); },
     rescue() {
       [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => tone(f, 0.18, { vol: 0.14 }), i * 130));
     },

@@ -1,6 +1,8 @@
 /* Kiwi Story — 게임 본체: 엔티티, 상태, 루프, 렌더링 */
 (() => {
-  const VERSION = 'v4';
+  const VERSION = 'v5';
+  const RIDE_LIMIT = 14; // 풍선 최대 탑승 시간(초)
+  const RIDE_WARN = 10;  // 이 시점부터 깜빡이며 예고
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
 
@@ -130,14 +132,15 @@
       b.vx *= Math.pow(0.25, dt); // 공기 저항
       b.vx = Math.max(-160, Math.min(160, b.vx));
       if (ax) player.facing = ax;
-      physicsStep(L, b, dt, { gravity: 0, oneWay: false });
+      physicsStep(L, b, dt, { gravity: 0 });
       if (b.y < -TILE) { b.y = -TILE; b.vy = Math.max(0, b.vy); }
       // 플레이어는 풍선에 매달림
       player.x = b.x + b.w / 2 - player.w / 2;
       player.y = b.y + b.h + 4;
       player.vx = b.vx; player.vy = b.vy;
       b.rideTime = (b.rideTime || 0) + dt;
-      if (touchesTile(L, b, '^', 6) || b.rideTime > 14) popBalloon(b);
+      if (b.rideTime > RIDE_WARN && !b.warned) { b.warned = true; Sfx.hurry(); } // 터지기 예고
+      if (touchesTile(L, b, '^', 6) || b.rideTime > RIDE_LIMIT) popBalloon(b);
       if (inp.down) { b.homeY = b.y; player.riding = null; player.vy = 40; player.boardCd = 0.6; player.canAirJump = true; } // 키보드: 내려서 하차
     } else {
       player.riding = null;
@@ -262,7 +265,7 @@
       // 격추 지점 높이(homeY) 근처에서 둥둥 떠 있기
       b.vy = Math.max(-50, Math.min(50, (b.homeY - b.y) * 2)) + Math.sin(b.phase * 1.6) * 12;
       b.vx = Math.sin(b.phase * 0.9) * 14;
-      physicsStep(L, b, dt, { gravity: 0, oneWay: false });
+      physicsStep(L, b, dt, { gravity: 0 });
       if (b.y < 0) b.y = 0;
       if (touchesTile(L, b, '^', 6)) popBalloon(b);
     }
@@ -520,12 +523,25 @@
   function drawPlayer() {
     if (player.invuln > 0 && Math.floor(player.anim * 12) % 2 === 0 && G.state === 'play') return;
     const hop = player.onGround && Math.abs(player.vx) > 20 ? Math.abs(Math.sin(player.anim * 14)) * 3 : 0;
-    if (player.riding) drawBalloon(player.riding.x, player.riding.y, player.riding.w, player.riding.h, true);
+    if (player.riding) {
+      const rb = player.riding;
+      const warn = Math.max(0, Math.min(1, ((rb.rideTime || 0) - RIDE_WARN) / (RIDE_LIMIT - RIDE_WARN)));
+      drawBalloon(rb.x, rb.y, rb.w, rb.h, true, warn);
+    }
     drawKiwiBody(player.x + player.w / 2, player.y + player.h, player.facing, hop, false);
   }
 
-  function drawBalloon(x, y, w, h, ridden = false) {
+  function drawBalloon(x, y, w, h, ridden = false, warn = 0) {
     const cx = x + w / 2, cy = y + h / 2 - 4;
+    ctx.save();
+    if (warn > 0) {
+      // 터지기 예고: 깜빡이며 쪼그라들기
+      ctx.globalAlpha = 0.55 + 0.45 * Math.sin(performance.now() / 70);
+      const shrink = 1 - warn * 0.22;
+      ctx.translate(cx, cy);
+      ctx.scale(shrink, shrink);
+      ctx.translate(-cx, -cy);
+    }
     ctx.strokeStyle = 'rgba(80,60,40,.7)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -548,6 +564,7 @@
     ctx.lineTo(cx, y + h - 11);
     ctx.closePath();
     ctx.fill();
+    ctx.restore();
   }
 
   function drawWalker(w) {

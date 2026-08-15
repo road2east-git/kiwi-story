@@ -2,6 +2,7 @@
 const TILE = 32;
 const GRAVITY = 1800;
 const MAX_FALL = 720;
+const PLANK_H = 14; // 발판('=')의 충돌 두께: 위·아래·옆 모두 막히는 얇은 고체
 
 function tileAt(level, tx, ty) {
   if (tx < 0 || tx >= level.width) return '#'; // 좌우 경계는 벽 취급
@@ -12,9 +13,13 @@ function tileAt(level, tx, ty) {
 function isSolid(ch) { return ch === '#'; }
 
 /* body: {x, y, w, h, vx, vy, onGround} — 축 분리 AABB 충돌 해소 */
-function physicsStep(level, b, dt, { gravity = GRAVITY, oneWay = true, maxFall = MAX_FALL } = {}) {
+function physicsStep(level, b, dt, { gravity = GRAVITY, maxFall = MAX_FALL } = {}) {
   b.vy = Math.min(b.vy + gravity * dt, maxFall);
   const prevBottom = b.y + b.h;
+  const prevTop = b.y;
+
+  // 발판('=') 얇은 판과 몸이 세로로 겹치는지 (타일 윗부분 PLANK_H만 충돌)
+  const overlapsPlank = (ty) => b.y < ty * TILE + PLANK_H && b.y + b.h > ty * TILE;
 
   // X축 이동/충돌
   b.x += b.vx * dt;
@@ -22,12 +27,18 @@ function physicsStep(level, b, dt, { gravity = GRAVITY, oneWay = true, maxFall =
   if (b.vx > 0) {
     const tx = Math.floor((b.x + b.w) / TILE);
     for (let ty = ty0; ty <= ty1; ty++) {
-      if (isSolid(tileAt(level, tx, ty))) { b.x = tx * TILE - b.w - 0.01; b.vx = 0; b.hitWall = true; break; }
+      const ch = tileAt(level, tx, ty);
+      if (isSolid(ch) || (ch === '=' && overlapsPlank(ty))) {
+        b.x = tx * TILE - b.w - 0.01; b.vx = 0; b.hitWall = true; break;
+      }
     }
   } else if (b.vx < 0) {
     const tx = Math.floor(b.x / TILE);
     for (let ty = ty0; ty <= ty1; ty++) {
-      if (isSolid(tileAt(level, tx, ty))) { b.x = (tx + 1) * TILE + 0.01; b.vx = 0; b.hitWall = true; break; }
+      const ch = tileAt(level, tx, ty);
+      if (isSolid(ch) || (ch === '=' && overlapsPlank(ty))) {
+        b.x = (tx + 1) * TILE + 0.01; b.vx = 0; b.hitWall = true; break;
+      }
     }
   }
 
@@ -40,7 +51,7 @@ function physicsStep(level, b, dt, { gravity = GRAVITY, oneWay = true, maxFall =
     for (let tx = tx0; tx <= tx1; tx++) {
       const ch = tileAt(level, tx, ty);
       const top = ty * TILE;
-      if (isSolid(ch) || (oneWay && ch === '=' && prevBottom <= top + 1)) {
+      if (isSolid(ch) || (ch === '=' && prevBottom <= top + 1)) {
         b.y = top - b.h - 0.01;
         b.vy = 0;
         b.onGround = true;
@@ -50,7 +61,15 @@ function physicsStep(level, b, dt, { gravity = GRAVITY, oneWay = true, maxFall =
   } else if (b.vy < 0) {
     const ty = Math.floor(b.y / TILE);
     for (let tx = tx0; tx <= tx1; tx++) {
-      if (isSolid(tileAt(level, tx, ty))) { b.y = (ty + 1) * TILE + 0.01; b.vy = 0; break; }
+      const ch = tileAt(level, tx, ty);
+      if (isSolid(ch)) { b.y = (ty + 1) * TILE + 0.01; b.vy = 0; break; }
+      // 발판 밑면에 머리를 부딪힘: 아래에서 위로는 통과 불가
+      if (ch === '=') {
+        const stripBottom = ty * TILE + PLANK_H;
+        if (b.y < stripBottom && prevTop >= stripBottom) {
+          b.y = stripBottom + 0.01; b.vy = 0; break;
+        }
+      }
     }
   }
 }
