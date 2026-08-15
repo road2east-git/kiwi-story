@@ -137,7 +137,7 @@
       player.vx = b.vx; player.vy = b.vy;
       b.rideTime = (b.rideTime || 0) + dt;
       if (touchesTile(L, b, '^', 6) || b.rideTime > 14) popBalloon(b);
-      if (inp.down) { player.riding = null; player.vy = 40; player.boardCd = 0.6; player.canAirJump = true; } // 키보드: 내려서 하차
+      if (inp.down) { b.homeY = b.y; player.riding = null; player.vy = 40; player.boardCd = 0.6; player.canAirJump = true; } // 키보드: 내려서 하차
     } else {
       player.riding = null;
       const ax = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
@@ -205,8 +205,9 @@
           a.life = 0; G.score += 100;
           f.falling = true; f.vy = -80;
           Sfx.hit();
-          // 적이 떨어지고 빈 풍선이 남는다
-          balloons.push({ x: f.x - 1, y: f.y - 30, w: 26, h: 28, vx: 0, vy: -30, phase: Math.random() * 6.28, popped: false });
+          // 적이 떨어지고 빈 풍선이 그 자리에 남는다
+          balloons.push({ x: f.x - 1, y: f.y - 30, w: 26, h: 28, vx: 0, vy: -20,
+                          homeY: f.y - 44, phase: Math.random() * 6.28, popped: false });
         }
       }
     }
@@ -257,7 +258,8 @@
     for (const b of balloons) {
       if (b.popped || player.riding === b) continue;
       b.phase += dt;
-      b.vy = -26 + Math.sin(b.phase * 1.6) * 18;
+      // 격추 지점 높이(homeY) 근처에서 둥둥 떠 있기
+      b.vy = Math.max(-50, Math.min(50, (b.homeY - b.y) * 2)) + Math.sin(b.phase * 1.6) * 12;
       b.vx = Math.sin(b.phase * 0.9) * 14;
       physicsStep(L, b, dt, { gravity: 0, oneWay: false });
       if (b.y < 0) b.y = 0;
@@ -327,6 +329,7 @@
       ctx.translate(-cam.x, -cam.y);
       drawHills();
       drawTiles();
+      drawHints();
       drawCage();
       for (const c of coins) if (!c.taken) drawCoin(c);
       for (const w of walkers) if (!w.dead) drawWalker(w);
@@ -454,6 +457,23 @@
         }
       }
     }
+  }
+
+  function drawHints() {
+    if (G.levelIndex !== 0 || G.state !== 'play') return;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = 'bold 14px system-ui, sans-serif';
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'rgba(30,60,90,.55)';
+    ctx.fillStyle = '#fff';
+    const line = (text, x, y) => { ctx.strokeText(text, x, y); ctx.fillText(text, x, y); };
+    line('◀▶ 이동 · A 점프 (공중에서 한 번 더!)', 250, 360);
+    line('B 발사', 250, 382);
+    line('풍선 탄 적을 B로 쏘면 빈 풍선이 남아요', 1030, 150);
+    line('빈 풍선에 닿으면 탑승! A로 상승 🎈', 1030, 172);
+    ctx.restore();
   }
 
   function drawKiwiBody(x, y, facing, hop, isFriend) {
