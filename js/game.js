@@ -1,5 +1,6 @@
 /* Kiwi Story — 게임 본체: 엔티티, 상태, 루프, 렌더링 */
 (() => {
+  const VERSION = 'v4';
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
 
@@ -675,6 +676,7 @@
       centerText('이동 ◀▶ · 점프 A(공중에서 한 번 더!) · 발사 B', chh * 0.66, 13 * u, '#9fc9ee');
       if (Math.floor(performance.now() / 500) % 2 === 0)
         centerText('탭 또는 아무 키나 눌러 시작', chh * 0.78, 18 * u, '#ffe08a');
+      centerText(VERSION, chh - 26 * u, 11 * u, 'rgba(255,255,255,.55)');
       ctx.restore();
       return;
     }
